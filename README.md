@@ -4,13 +4,14 @@
 CIT 128 Student Directed Project
 
 ## Student Info
-
-Add your Name, CRN, and Semester Year here using unordered bullets in Markdown.
+Jared Mendoza
+37902
+2nd semester
+2023
 
 ## Program Description
 
-Describe your individual project program and include the goals of the program.
-
+My program takes the user's web camera input and runs that input frame by frame through a model that will be trained to detect humans, dogs, and cats. It will count how many of each it saw and display those numbers at the end. If there aren't any categories mentioned in the frame, then the program will show "nothing detected." 
 ### Video Demonstration
 
 Add a Link to your video demonstration
