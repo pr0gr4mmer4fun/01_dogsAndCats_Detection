@@ -119,27 +119,28 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes):
             if confidence > 0.2:
                 # extract the index of the class label from the
                 # `detections`
-                label_confidence = int(detections[0, 0, i, 1])
+                class_confidence = int(detections[0, 0, i, 1])
                 filtered_classes = select_only_what_we_want()
 
                 # PUT CLASSES HERE
-                if label_confidence in filtered_classes.values():
+                if class_confidence in filtered_classes.values():
                     box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                     (startX, startY, endX, endY) = box.astype("int")
 
                     # count how many dogs humans and cats we see
-                    count[classes[label_confidence]] += 1
+                    count[classes[class_confidence]] += 1
 
                     # draw the prediction on the frame
-                    label = "{}: {:.2f}%".format(classes[label_confidence],
+                    label = "{}: {:.2f}%".format(classes[class_confidence],
                                                  confidence * 100)
                     cv2.rectangle(frame, (startX, startY), (endX, endY),
-                                  colors[label_confidence].tolist(), 2)
+                                  colors[class_confidence].tolist(), 2)
                     y = startY - 15 if startY - 15 > 15 else startY + 15
                     cv2.putText(frame, label, (startX, y),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, colors[label_confidence].tolist(), 2)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, colors[class_confidence].tolist(), 2)
                 else:
-                    print("NOTHING DETECTED")
+                    if confidence > 1:
+                        print("NOTHING DETECTED")
 
         # show the output frame
         cv2.imshow("Video Feed", frame)
@@ -189,4 +190,5 @@ def display():
 
 if __name__ == "__main__":
     display()
+
 
