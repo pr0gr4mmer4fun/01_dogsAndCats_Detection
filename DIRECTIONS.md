@@ -45,11 +45,13 @@ The student provided rubric is worth 75 points and is specific to the individual
     * Student verbally describes how to start and use the application. (5pt)
     * Student discusses the testing process as part of the project and the verbal description matches the written description. (5pt)
 * **Student Grading Rubric (75pt)**
-  * Video Feed is displayed (25pt)
-  * categories mentioned are displayed when they encounter the object they're supposed to detect (15pt)
-  * Takes user input for frame size,and confidence levels (15pt)  
-  * runs above 30 fps (5pt)
-  * if there is nothing in the frame show that nothing is detected (15pt)
+  * Video Processing and Functionality (60 pt)
+    * Video Feed is displayed (25pt)
+    * Video runs above 30 fps (5pt)
+    * Categories mentioned are displayed when they encounter the object they're supposed to detect (15pt)
+    * If there is nothing in the frame show that nothing is detected (15pt)
+  * User Interaction (15 pt)
+    * Takes user input for frame size, and confidence levels (15pt)  
 
 Total Points: 200
 
