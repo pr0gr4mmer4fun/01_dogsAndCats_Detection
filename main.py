@@ -23,7 +23,7 @@ def get_versions():
     """Show versions of packages to inform the user about potential updates.
 
     Returns:
-        text: Shows the current versions of the imports OpenCV, Argparse, NumPy, and Imutils.
+        text: Shows the current versions of the imports OpenCV, NumPy, and Imutils.
 
     """
 
