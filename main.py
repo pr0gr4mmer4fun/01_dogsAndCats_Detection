@@ -8,6 +8,7 @@
 # Jared Mendoza, python-II Professor Harlow 2-16-2023
 # class project
 
+
 import os
 from imutils.video import VideoStream
 from imutils.video import FPS
@@ -16,26 +17,6 @@ import imutils
 import time
 import cv2
 import keyboard
-
-
-# show versions of what packages are running to make sure that the user knows if they need to update or not
-def get_versions():
-    """Show versions of packages to inform the user about potential updates.
-
-    Returns:
-        text: Shows the current versions of the imports OpenCV, NumPy, and Imutils.
-
-    """
-
-    print('\n[INFO] running, please wait\n')
-    print('\n[INFO] Versions installed:')
-    print('[INFO] Getting Versions...\n')
-
-    print('[INFO] cv2 version:', cv2.__version__)
-    print('[INFO] numpy version:', np.__version__)
-
-    # always the last one because it is the new line one
-    print('[INFO] imutils version:', imutils.__version__, '\n')
 
 
 # get user input for how big they want the frame to be
@@ -48,15 +29,31 @@ def get_user_input():
     Returns:
         frame: The size will depend on user preferences.
 
+    ValueError:
+        Returns Invalid choice, defaulting to 720 x 720 for both height and width parameters
+
+
     """
 
     print("1. Input how big you want the frame. Ex 420x420, 720x720, 1080x1080, 1440x1440")
     print("2. Press 'ENTER' twice to run the program or 'q' to exit\n")
 
-    frame_height = int(input("Height: "))
-    frame_width = int(input("Width: "))
+    try:
+        frame_height = int(input("Height: "))
+        if frame_height is str or None:
+            raise ValueError
+    except ValueError:
+        print("Invalid choice, defaulting to 720 x 720")
+        frame_height = 720
+    try:
+        frame_width = int(input("Width: "))
+        if frame_width is str or None:
+            raise ValueError
+    except ValueError:
+        print("Invalid choice, defaulting to 720 x 720")
+        frame_width = 720
 
-    return frame_height, frame_width,
+    return frame_height, frame_width
 
 
 # The model is trained on the 21 classes below, in order to filter out...
@@ -191,11 +188,29 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
     """
 
     count = {"person": 0, "dog": 0, "cat": 0}
+    detected_objects = {}
+    frame_index = 0
+    start_time = time.time()
 
     while True:
+
         # grab the frame from the threaded video stream
         frame = vs.read()
+        time.sleep(0.01)
+
+        if frame is None:
+            continue
+
         frame_width, frame_height = int(frame_width), int(frame_height)
+
+        # start a timer for the fps
+        elapsed_time = time.time() - start_time
+        fps_amount = frame_index / elapsed_time if elapsed_time > 0 else 0
+        # display FPS on the screen
+        fps_info = "FPS: {:.2f}".format(fps_amount)
+        cv2.putText(frame, fps_info, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+        frame_index += 1
 
         # Make sure dimensions are valid before resizing
         if frame_width > 0 and frame_height > 0:
@@ -206,9 +221,13 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
 
         # grab the frame dimensions and convert it to a blob
         (h, w) = frame.shape[:2]
-        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
-                                     0.007843, (300, 300), 127.5)
 
+        # define the blob parameters more clearly
+        resized_frame = cv2.resize(frame, (300, 300))
+        scalefactor = 0.007843
+        size = (300, 300)
+        mean = 127.5
+        blob = cv2.dnn.blobFromImage(resized_frame, scalefactor, size, mean)
         # pass the blob through the network and obtain the detections and
         # predictions
         net.setInput(blob)
@@ -225,7 +244,7 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
 
             if confidence > model_confidence:
                 # extract the index of the class label from the
-                # `detections`
+    
                 class_confidence = int(detections[0, 0, i, 1])
                 filtered_classes = select_only_what_we_want()
 
@@ -237,15 +256,51 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
                     label = "{}: {:.2f}%".format(classes[class_confidence],
                                                  confidence * 100)
                     # counting the objects
+                    # FIXED!!!
                     class_name = classes[class_confidence]
-                    if class_name in count:
-                        count[class_name] += 1
 
-                    cv2.rectangle(frame, (startX, startY), (endX, endY),
-                                  colors[class_confidence].tolist(), 2)
-                    y = startY - 15 if startY - 15 > 15 else startY + 15
-                    cv2.putText(frame, label, (startX, y),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, colors[class_confidence].tolist(), 2)
+                    # Check if the class is among the classes we're interested in
+                    if class_name in filtered_classes:
+
+                        # Define a unique key for each detected object
+                        object_key = f"{class_name}_{startX}_{startY}"
+
+                        # Get the current time
+                        current_time = time.time()
+
+                        # Check if the object is already in the detected_objects dictionary
+                        if object_key not in detected_objects:
+                            # If it's not, add it
+                            detected_objects[object_key] = current_time
+                        else:
+                            # If it is, check how much time has passed since it was first detected
+                            time_since_detection = current_time - detected_objects[object_key]
+
+                            # If more than 4.5 seconds have passed, add to the count 
+                            if time_since_detection >= 4.5:
+                                count[class_name] += 1
+
+                                # Update the time of detection for this object
+                                detected_objects[object_key] = current_time
+
+                    # set color
+                    rectangle_color = colors[class_confidence].tolist()
+                    # Draw the rectangle on the frame
+                    cv2.rectangle(frame, (startX, startY), (endX, endY), rectangle_color, 2)
+
+                    # Define the position for the label
+                    y_position = startY - 15 if startY - 15 > 15 else startY + 15
+                    label_position = (startX, y_position)
+
+                    # Define the font for the label
+                    label_font = cv2.FONT_HERSHEY_SIMPLEX
+                    label_scale = 0.5
+                    label_color = rectangle_color
+                    label_thickness = 2
+
+                    # Put the label on the frame
+                    cv2.putText(frame, label, label_position, label_font, label_scale, label_color, label_thickness)
+
                 else:
                     if confidence > 1:
                         print("NOTHING DETECTED")
@@ -263,7 +318,7 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
 
     # stop the timer and display FPS information
     fps.stop()
-    print("number of objects:", count)
+    print("\nObjects detected:", f"person: {count['person']}, dog: {count['dog']}, cat: {count['cat']}")
 
     print("[INFO] elapsed time: {:.2f} seconds".format(fps.elapsed()))
     time_passed = fps.elapsed()
@@ -286,7 +341,7 @@ def display(model_confidence):
 
     """
 
-    get_versions()
+    settings()
 
     frame_height, frame_width, = get_user_input()
 
@@ -310,10 +365,40 @@ def display(model_confidence):
 
 
 if __name__ == "__main__":
-    print("settings \n")
-    model_confidence = float(input("Choose model accuracy (0.1 to 0.9): "))
-    if model_confidence < 0.1 or model_confidence > 0.9 or str:
-        print("Invalid choice, defaulting to value of 0.7.")
-        model_confidence = 0.5
 
-        display(model_confidence)
+    # show versions of what packages are running to make sure that the user knows if they need to update or not
+    def settings():
+        """sets the users preferences.
+
+        Returns:
+            text: Shows the current versions of the imports OpenCV, NumPy, and Imutils.
+
+        float(input):
+            sets: model accuracy
+
+        ValueError:
+            returns: invalid choice and sets the default confidence to 0.7
+
+        """
+
+
+    print('\n[INFO] running, please wait\n')
+    print('\n[INFO] Versions installed:')
+    print('[INFO] Getting Versions...\n')
+
+    print('[INFO] cv2 version:', cv2.__version__)
+    print('[INFO] numpy version:', np.__version__)
+
+    # always the last one because it is the new line one
+    print('[INFO] imutils version:', imutils.__version__, '\n')
+
+    print("settings \n")
+    try:
+        model_confidence = float(input("Choose model accuracy (0.1 to 0.9): "))
+        if model_confidence < 0.1 or model_confidence > 0.9:
+            raise ValueError
+    except ValueError:
+        print("Invalid choice, defaulting to value of 0.7.")
+        model_confidence = 0.7
+
+    display(model_confidence)
