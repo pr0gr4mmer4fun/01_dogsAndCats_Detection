@@ -31,3 +31,5 @@ Describe the testing process using paragraphs and numbered bullet lists how to m
 ## Directions and Grading Rubric
 
 To review the project directions or update the grading rubric review the [DIRECTIONS.md](DIRECTIONS.md) file.
+
+Credits:  MobileNet SSD 
