@@ -17,6 +17,9 @@ import imutils
 import time
 import cv2
 import keyboard
+import threading
+import logging
+from queue import Queue
 
 
 # get user input for how big they want the frame to be
@@ -77,7 +80,15 @@ def get_model_classes():
 
 # selection process
 def select_only_what_we_want():
-    """Returns a dictionary of the classes selected for object detection along with their built-in integer."""
+    """Returns a dictionary of the classes selected for object detection along with their built-in integer.
+
+        person: is given an integer 15 to identify it when being processed in the model
+
+        cat: is given an integer 8 to identify it when being processed in the model
+
+        dog: is given an integer 12 to identify it when being processed in the model
+
+    """
 
     return {"person": 15, "cat": 8, "dog": 12}
 
@@ -196,7 +207,8 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
 
         # grab the frame from the threaded video stream
         frame = vs.read()
-        time.sleep(0.01)
+        # set small delay so that the processor is not overloaded with frames
+        time.sleep(0.02)
 
         if frame is None:
             continue
@@ -206,10 +218,15 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
         # start a timer for the fps
         elapsed_time = time.time() - start_time
         fps_amount = frame_index / elapsed_time if elapsed_time > 0 else 0
+
         # display FPS on the screen
         fps_info = "FPS: {:.2f}".format(fps_amount)
         cv2.putText(frame, fps_info, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
+        # translate the count from string to integer
+        translate_countStr = ', '.join(f'{k}: {v}' for k, v in count.items())
+        # display the count on screen
+        cv2.putText(frame, translate_countStr, (150, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         frame_index += 1
 
         # Make sure dimensions are valid before resizing
@@ -244,7 +261,7 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
 
             if confidence > model_confidence:
                 # extract the index of the class label from the
-    
+
                 class_confidence = int(detections[0, 0, i, 1])
                 filtered_classes = select_only_what_we_want()
 
@@ -276,7 +293,7 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
                             # If it is, check how much time has passed since it was first detected
                             time_since_detection = current_time - detected_objects[object_key]
 
-                            # If more than 4.5 seconds have passed, add to the count 
+                            # If more than 4.5 seconds have passed, add to the count
                             if time_since_detection >= 4.5:
                                 count[class_name] += 1
 
@@ -294,7 +311,7 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
 
                     # Define the font for the label
                     label_font = cv2.FONT_HERSHEY_SIMPLEX
-                    label_scale = 0.5
+                    label_scale = 1
                     label_color = rectangle_color
                     label_thickness = 2
 
@@ -334,7 +351,7 @@ def Processing(vs, fps, frame_width, frame_height, net, colors, classes, model_c
 
 
 def display(model_confidence):
-    """Display package versions, user input, and run object detection on the video stream.
+    """Display package versions, user input, and run object detection on the video stream
 
         model_confidence: object
             Displays what settings user has chosen.
@@ -368,7 +385,7 @@ if __name__ == "__main__":
 
     # show versions of what packages are running to make sure that the user knows if they need to update or not
     def settings():
-        """sets the users preferences.
+        """sets the users preferences
 
         Returns:
             text: Shows the current versions of the imports OpenCV, NumPy, and Imutils.
@@ -382,23 +399,119 @@ if __name__ == "__main__":
         """
 
 
-    print('\n[INFO] running, please wait\n')
-    print('\n[INFO] Versions installed:')
-    print('[INFO] Getting Versions...\n')
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
 
-    print('[INFO] cv2 version:', cv2.__version__)
-    print('[INFO] numpy version:', np.__version__)
 
-    # always the last one because it is the new line one
-    print('[INFO] imutils version:', imutils.__version__, '\n')
+    # Add a new function to handle logging
+    def log_info(message):
+        """Logs information
 
-    print("settings \n")
-    try:
-        model_confidence = float(input("Choose model accuracy (0.1 to 0.9): "))
-        if model_confidence < 0.1 or model_confidence > 0.9:
-            raise ValueError
-    except ValueError:
-        print("Invalid choice, defaulting to value of 0.7.")
-        model_confidence = 0.7
+                Args:
+                    message (str): The message that needs to be logged.
 
-    display(model_confidence)
+                Returns:
+                    None: This function does not return anything.
+
+                logging.info(message):
+                    sets: Logs the information message.
+            """
+        logging.info(message)
+
+
+    # Add multithreading for better performance
+    class WorkerThread(threading.Thread):
+        """use multithreading for better performance
+
+               Args:
+                   queue (Queue): The queue that holds tasks to be executed by the thread.
+
+               Returns:
+                   None: This class does not return anything, but creates a daemon thread that executes tasks from the queue.
+
+               threading.Thread.__init__(self):
+                   sets: Initializes the Thread.
+
+               self.queue.get():
+                   sets: Gets the next task from the queue.
+           """
+
+        def __init__(self, queue):
+            threading.Thread.__init__(self)
+            self.queue = queue
+            self.daemon = True
+
+        def run(self):
+            while True:
+                function, args = self.queue.get()
+                function(*args)
+                self.queue.task_done()
+
+
+    # start the worker threads
+    def start_worker_threads(num_threads):
+        """Start the worker threads
+
+               Args:
+                   num_threads (int): The number of worker threads to be started.
+
+               Returns:
+                   queue (Queue): Returns the queue that holds tasks to be executed by the worker threads.
+
+               WorkerThread(queue).start():
+                   sets: Starts a new worker thread.
+
+
+           """
+        queue = Queue()
+        for _ in range(num_threads):
+            worker = WorkerThread(queue)
+            worker.start()
+        return queue
+
+    # Update the main function to use the new logging function and multithreading
+
+
+def run():
+    print("Running Windows version...")
+    print("press 'q' to quit")
+
+    if __name__ == "__main__":
+
+        log_info('[INFO] running, Versions installed:')
+        log_info('[INFO] Getting Versions...')
+        log_info('[INFO] cv2 version:' + cv2.__version__)
+        log_info('[INFO] numpy version:' + np.__version__)
+        log_info('[INFO] imutils version:' + imutils.__version__)
+
+        try:
+            model_confidence = float(input("Choose model accuracy (0.1 to 0.9): "))
+            if model_confidence < 0.1 or model_confidence > 0.9:
+                raise ValueError
+        except ValueError:
+            log_info("Invalid choice, defaulting to value of 0.7.")
+            model_confidence = 0.7
+
+        frame_height, frame_width, = get_user_input()
+
+        while True:
+            if keyboard.is_pressed('enter'):
+                log_info("Starting video...")
+
+                protxtfile = "MobileNetSSD_deploy.prototxt.txt"
+                model_file = "MobileNetSSD_deploy.caffemodel"
+
+                if see_if_files_exist(protxtfile, model_file):
+                    net = get_video(protxtfile, model_file)
+                    classes = get_model_classes()
+                    colors = show_colors(classes)
+                    cap, fps = run_camera()
+                    Processing(cap, fps, frame_width, frame_height, net, colors, classes, model_confidence)
+
+            elif keyboard.is_pressed('q'):
+                log_info('[INFO] Program Terminated')
+                break
+
+
+if __name__ == '__main__':
+    run()
