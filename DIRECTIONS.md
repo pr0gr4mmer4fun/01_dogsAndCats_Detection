@@ -47,7 +47,7 @@ The student provided rubric is worth 75 points and is specific to the individual
 * **Student Grading Rubric (75pt)**
   * Video Processing and Functionality (60 pt)
     * Video Feed is displayed (25pt)
-    * Video runs above 30 fps (5pt)
+    * Video runs above 10 fps (5pt)
     * Categories mentioned are displayed when they encounter the object they're supposed to detect (15pt)
     * If there is nothing in the frame show that nothing is detected (15pt)
   * User Interaction (15 pt)
