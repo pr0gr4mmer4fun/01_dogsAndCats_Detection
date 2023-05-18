@@ -10,3 +10,5 @@ ls
 
 sudo python3 Mac_version.py *enter*
 
+to see your current directory type: pwd *enter*
+
