@@ -1,0 +1,12 @@
+Open terminal window 
+
+enter in the following order 
+
+cd desktop
+
+ls 
+
+*find the python file Mac_version in desktop directory*
+
+sudo python3 Mac_version.py *enter*
+
