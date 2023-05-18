@@ -1,0 +1,534 @@
+#!/usr/bin/env python3
+'''
+    Rio Hondo College
+    CIT 128: Python Programming II
+    Student Directed Project
+'''
+
+# Jared Mendoza, python-II Professor Harlow 2-16-2023
+# class project
+
+
+import os
+from imutils.video import VideoStream
+from imutils.video import FPS
+import numpy as np
+import imutils
+import time
+import cv2
+import keyboard
+import threading
+import logging
+from queue import Queue
+
+
+# get user input for how big they want the frame to be
+def get_user_input():
+    """Get user input for frame dimensions and return as a tuple.
+
+    Inputs:
+       int: How big the user wants to make the frame size.
+
+    Returns:
+        frame: The size will depend on user preferences.
+
+    ValueError:
+        Returns Invalid choice, defaulting to 720 x 720 for both height and width parameters
+
+
+    """
+
+    print("Starting Mac Version, press enter twice")
+
+    # Mac is a pain with security protocols so frame size must be set in stone
+    frame_height = 1440
+
+    frame_width = 1440
+
+    return frame_height, frame_width
+
+
+# The model is trained on the 21 classes below, in order to filter out...
+# unneeded information we specify which classes we want to detect
+
+def get_model_classes():
+    """Return the list of classes that the model is trained on,
+    the model must have all 21 classes present or else it cannot compare detected objects to all...
+    ..other classes making it so that it is unable to process the detected object.
+
+    Returns:
+        text: what object is being detected in the frame.
+
+    """
+
+    return ["background", "aeroplane", "bicycle", "bird", "boat",
+            "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
+            "dog", "horse", "motorbike", "person", "pottedplant", "sheep",
+            "sofa", "train", "tvmonitor", "apple"]
+
+
+# selection process
+def select_only_what_we_want():
+    """Returns a dictionary of the classes selected for object detection along with their built-in integer.
+        person: is given an integer 15 to identify it when being processed in the model
+
+        cat: is given an integer 8 to identify it when being processed in the model
+
+        dog: is given an integer 12 to identify it when being processed in the model
+
+    """
+
+    return {"person": 15, "cat": 8, "dog": 12}
+
+
+# make it so that the bounding boxes are random colors within the RGB spectrum
+def show_colors(colors):
+    """Return random colors within the RGB spectrum for bounding boxes.
+    Param colors:
+            returns a random color for when an object is detected this color...
+    ..is applied to the bounding box.
+
+    """
+
+    return np.random.uniform(0, 255, size=(len(colors), 3))
+
+
+# check if the model files are present if they are not show the error message
+def see_if_files_exist(protxtfile, model_file):
+    """Check if the model files exist and return a boolean.
+      protxtfile:
+            returns: the protxtfile that contains the images used for training.
+
+    param model_file:
+            returns: The CAFFE model file that turns the model into plain text.
+
+    """
+
+    if not os.path.exists(protxtfile):
+        print("[ERROR!] No protxtfile detected please check file location")
+        if not os.path.exists(model_file):
+            print("[ERROR!] No model file detected check file location")
+            return False
+        else:
+            return False
+    return True
+
+
+# get the video and put it through the model
+def get_video(protxtfile, model_file):
+    """Load the video and return it after putting it through the model.
+
+    protxtfile:
+            returns: the protxtfile that contains the images used for training.
+
+    param model_file:
+            returns: The CAFFE model file that turns the model into plain text.
+    """
+
+    return cv2.dnn.readNetFromCaffe(protxtfile, model_file)
+
+
+# start camera
+def run_camera():
+    """Start the camera and start the FPS counter
+    Takes the video-feed from the users webcam and starts the timer for the fps.
+
+    """
+
+    # allow the camera sensor to warm up,
+    # start the FPS counter
+    # THIS IS THE MAC VERSION IT WILL NOT WORK FOR WINDOWS!
+    # MAC AREA
+
+    camera_indexes = []
+    for i in range(10):
+        cap = cv2.VideoCapture(i)
+        if not cap.isOpened():
+            break
+        camera_indexes.append(i)
+        cap.release()
+
+    # Print the list of available cameras
+    print("Loading available cameras:")
+    for i in camera_indexes:
+        if camera_indexes is None:
+            print("Error! no Cameras available :( ")
+        else:
+            print(f"{i}: {cv2.VideoCapture(i).getBackendName()}")
+
+    ####testing area
+    fps = 60
+    # --- WebCam1 (successful)
+    cap = cv2.VideoCapture(camera_indexes[0])
+    if not cap.isOpened():
+        print("Error: Camera failed to open.")
+        sys.exit(1)
+    # this is needed because it stops the
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+
+    while cap.isOpened():
+        success, image = cap.read()
+        if not success:
+            print("Ignoring empty camera frame.")
+            break
+
+    return cap, fps
+
+
+# MAC AREA
+
+def Processing(cap, fps, frame_width, frame_height, net, colors, classes, model_confidence):
+    """Process the video stream, display object detection, and count detected objects.
+    param: cap
+        Video-Stream takes the uses webcam and starts recording
+
+
+    Param: Fps
+        Frames per second measures how many frames per second the program is running at
+        having the fps being known is important as proper streaming should take place
+        above 30 frames per second.
+
+    Param input:
+            Returns:
+                frame_width:
+                    Frame_width is an input the user interacts with at the beginning that sets the width of the frame
+
+    Param input:
+            Returns:
+                frame_height:
+                    Frame_height is an input the user interacts with at the beginning that sets the height of the frame
+
+    Param: net
+        Using the network parameter we can now send our images for processing without creating our own Convolutional
+    Neural Network instead we can now use the built-in processing from numpy.
+
+     Param: colors
+        returns:
+            a random color for when an object is detected this color...
+        ...is applied to the bounding box. Serves an Aesthetic purpose.
+
+    Param: classes
+        Returns:
+            text: what object is being detected in the frame.
+
+    Param: model_confidence
+        input:
+            parameter:
+                Model_confidence is what float between 0.1 and 0.9 does the user want to set the confidence of the...
+                program to, the models set confidence will effect how accuracy the objects in the frame are being assigned..
+                ..to the mentioned classes.
+
+    """
+
+    count = {"person": 0, "dog": 0, "cat": 0}
+    detected_objects = {}
+    frame_index = 0
+    start_time = time.time()
+
+    while True:
+
+        # grab the frame from the threaded video stream
+        ret, frame = cap.read()
+        if not ret:
+            print("[INFO] Failed to capture video feed :( ")
+            continue
+
+        time.sleep(0.01)
+
+        if frame is None:
+            continue
+
+        frame_width, frame_height = int(frame_width), int(frame_height)
+
+        # start a timer for the fps
+        elapsed_time = time.time() - start_time
+        fps_amount = frame_index / elapsed_time if elapsed_time > 0 else 0
+
+        # display FPS on the screen
+        fps_info = "FPS: {:.2f}".format(fps_amount)
+        cv2.putText(frame, fps_info, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+        # translate the count from string to integer
+        translate_countStr = ', '.join(f'{k}: {v}' for k, v in count.items())
+        # display the count on screen
+        cv2.putText(frame, translate_countStr, (150, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        frame_index += 1
+
+        # Make sure dimensions are valid before resizing
+        if frame_width > 0 and frame_height > 0:
+            frame = cv2.resize(frame, (frame_width, frame_height), interpolation=cv2.INTER_AREA)
+        else:
+            print("[FRAME ERROR!] Please provide valid frame dimensions.")
+            break
+
+        # grab the frame dimensions and convert it to a blob
+        (h, w) = frame.shape[:2]
+
+        # define the blob parameters more clearly
+        resized_frame = cv2.resize(frame, (300, 300))
+        scalefactor = 0.007843
+        size = (300, 300)
+        mean = 127.5
+        blob = cv2.dnn.blobFromImage(resized_frame, scalefactor, size, mean)
+        # pass the blob through the network and obtain the detections and
+        # predictions
+        net.setInput(blob)
+        detections = net.forward()
+
+        # loop over the detections
+        for i in np.arange(0, detections.shape[2]):
+            # extract the confidence (i.e., probability) associated with
+            # the prediction
+            confidence = detections[0, 0, i, 2]
+
+            # filter out weak detections by ensuring the `confidence` is
+            # greater than the minimum confidence
+
+            if confidence > model_confidence:
+                # extract the index of the class label from the
+
+                class_confidence = int(detections[0, 0, i, 1])
+                filtered_classes = select_only_what_we_want()
+
+                # PUT CLASSES HERE
+                if class_confidence in filtered_classes.values():
+                    box = detections[0, 0, i, 3:9] * np.array([w, h, w, h])
+                    (startX, startY, endX, endY) = box.astype("int")
+                    # draw the prediction on the frame
+                    label = "{}: {:.2f}%".format(classes[class_confidence],
+                                                 confidence * 100)
+                    # counting the objects
+                    # FIXED!!!
+                    class_name = classes[class_confidence]
+
+                    # Check if the class is among the classes we're interested in
+                    if class_name in filtered_classes:
+
+                        # Define a unique key for each detected object
+                        object_key = f"{class_name}_{startX}_{startY}"
+
+                        # Get the current time
+                        current_time = time.time()
+
+                        # Check if the object is already in the detected_objects dictionary
+                        if object_key not in detected_objects:
+                            # If it's not, add it
+                            detected_objects[object_key] = current_time
+                        else:
+                            # If it is, check how much time has passed since it was first detected
+                            time_since_detection = current_time - detected_objects[object_key]
+
+                            # If more than 4.5 seconds have passed, add to the count
+                            if time_since_detection >= 4.5:
+                                count[class_name] += 1
+
+                                # Update the time of detection for this object
+                                detected_objects[object_key] = current_time
+
+                    # set color
+                    rectangle_color = colors[class_confidence].tolist()
+                    # Draw the rectangle on the frame
+                    cv2.rectangle(frame, (startX, startY), (endX, endY), rectangle_color, 2)
+
+                    # Define the position for the label
+                    y_position = startY - 15 if startY - 15 > 15 else startY + 15
+                    label_position = (startX, y_position)
+
+                    # Define the font for the label
+                    label_font = cv2.FONT_HERSHEY_SIMPLEX
+                    label_scale = 0.5
+                    label_color = rectangle_color
+                    label_thickness = 2
+
+                    # Put the label on the frame
+                    cv2.putText(frame, label, label_position, label_font, label_scale, label_color, label_thickness)
+
+                else:
+                    if confidence > 1:
+                        print("NOTHING DETECTED")
+
+        # show the output frame
+        cv2.imshow("Video Feed", frame)
+        key = cv2.waitKey(1) & 0xFF
+
+        # check for keyboard input to break the loop
+        if key == ord("q"):
+            break
+
+    # stop the timer and display FPS information
+    fps.stop()
+    print("\nObjects detected:", f"person: {count['person']}, dog: {count['dog']}, cat: {count['cat']}")
+
+    print("[INFO] elapsed time: {:.2f} seconds".format(fps.elapsed()))
+    time_passed = fps.elapsed()
+    if time_passed > 0:
+
+        print("[INFO] FPS: {:.2f}".format(fps.fps()))
+    else:
+        print("[INFO] waiting for time to start ")
+
+    # do a bit of cleanup
+    cv2.destroyAllWindows()
+    cap.stop()
+
+
+def display(model_confidence):
+    """Display package versions, user input, and run object detection on the video stream
+
+        model_confidence: object
+            Displays what settings user has chosen.
+
+    """
+
+    settings()
+
+    frame_height, frame_width, = get_user_input()
+
+    while True:
+        if keyboard.is_pressed('enter'):
+            print("\nStarting video...")
+
+            protxtfile = "MobileNetSSD_deploy.prototxt.txt"
+            model_file = "MobileNetSSD_deploy.caffemodel"
+
+            if see_if_files_exist(protxtfile, model_file):
+                net = get_video(protxtfile, model_file)
+                classes = get_model_classes()
+                colors = show_colors(classes)
+                cap, fps = run_camera()
+                Processing(cap, fps, frame_width, frame_height, net, colors, classes, model_confidence)
+
+        elif keyboard.is_pressed('q'):
+            print('\n[INFO] Program Terminated')
+            break
+
+
+if __name__ == "__main__":
+
+    # show versions of what packages are running to make sure that the user knows if they need to update or not
+    def settings():
+        """sets the users preferences
+
+        Returns:
+            text: Shows the current versions of the imports OpenCV, NumPy, and Imutils.
+
+        float(input):
+            sets: model accuracy
+
+        ValueError:
+            returns: invalid choice and sets the default confidence to 0.7
+
+        """
+
+
+    # Add multithreading for better performance
+    class WorkerThread(threading.Thread):
+        """use multithreading for better performance
+
+               Args:
+                   queue (Queue): The queue that holds tasks to be executed by the thread.
+
+               Returns:
+                   None: This class does not return anything, but creates a daemon thread that executes tasks from the queue.
+
+               threading.Thread.__init__(self):
+                   sets: Initializes the Thread.
+
+               self.queue.get():
+                   sets: Gets the next task from the queue.
+           """
+
+        def __init__(self, queue):
+            threading.Thread.__init__(self)
+            self.queue = queue
+            self.daemon = True
+
+        def run(self):
+            while True:
+                function, args = self.queue.get()
+                function(*args)
+                self.queue.task_done()
+
+
+    # start the worker threads
+    def start_worker_threads(num_threads):
+        """Start the worker threads
+
+               Args:
+                   num_threads (int): The number of worker threads to be started.
+
+               Returns:
+                   queue (Queue): Returns the queue that holds tasks to be executed by the worker threads.
+
+               WorkerThread(queue).start():
+                   sets: Starts a new worker thread.
+           """
+        queue = Queue()
+        for _ in range(num_threads):
+            worker = WorkerThread(queue)
+            worker.start()
+        return queue
+
+    # Update the main function to use the new logging function and multithreading
+
+
+def run():
+    print("Running Mac version...")
+    print("press 'q' to quit")
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+
+    # Add a new function to handle logging
+    def log_info(message):
+        """Logs information
+
+                Args:
+                    message (str): The message that needs to be logged.
+
+                Returns:
+                    None: This function does not return anything.
+
+                logging.info(message):
+                    sets: Logs the information message.
+            """
+        logging.info(message)
+
+    log_info('[INFO] running, please wait')
+
+    log_info('[INFO] Versions installed:')
+    log_info('[INFO] Getting Versions...')
+    log_info('[INFO] cv2 version:' + cv2.__version__)
+    log_info('[INFO] numpy version:' + np.__version__)
+    log_info('[INFO] imutils version:' + imutils.__version__)
+
+    try:
+        model_confidence = float(input("Choose model accuracy (0.1 to 0.9): "))
+        if model_confidence < 0.1 or model_confidence > 0.9:
+            raise ValueError
+    except ValueError:
+        log_info("Invalid choice, defaulting to value of 0.7.")
+        model_confidence = 0.7
+
+    frame_height, frame_width, = get_user_input()
+
+    while True:
+        if keyboard.is_pressed('enter'):
+            log_info("Starting video...")
+
+            protxtfile = "MobileNetSSD_deploy.prototxt.txt"
+            model_file = "MobileNetSSD_deploy.caffemodel"
+
+            if see_if_files_exist(protxtfile, model_file):
+                net = get_video(protxtfile, model_file)
+                classes = get_model_classes()
+                colors = show_colors(classes)
+                cap, fps = run_camera()
+                Processing(cap, fps, frame_width, frame_height, net, colors, classes, model_confidence)
+
+        elif keyboard.is_pressed('q'):
+            log_info('[INFO] Program Terminated')
+            break
+
+
+if __name__ == '__main__':
+    run()
